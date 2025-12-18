@@ -8,7 +8,7 @@ class Pixel留言板 {
         this.cancelBtn = document.getElementById('cancel-btn');
         this.formatBtns = document.querySelectorAll('.format-btn');
         
-        this.cellSize = 20;
+        this.cellSize = this.calculateCellSize();
         this.rows = 0;
         this.cols = 0;
         this.calculateGridDimensions();
@@ -41,6 +41,28 @@ class Pixel留言板 {
         this.messagesRef = this.database.ref('messages');
         
         this.init();
+    }
+    
+    // 根据屏幕大小和设备类型计算单元格大小
+    calculateCellSize() {
+        const isMobile = window.innerWidth < 768;
+        const screenWidth = window.innerWidth;
+        
+        // 在手机端，根据屏幕宽度动态调整单元格大小
+        if (isMobile) {
+            // 确保在小屏幕上有合适的单元格大小和数量
+            // 手机端单元格更大，便于触摸操作
+            if (screenWidth < 360) {
+                return 25; // 非常小的手机
+            } else if (screenWidth < 480) {
+                return 30; // 小屏手机
+            } else {
+                return 35; // 大屏手机
+            }
+        } else {
+            // 桌面端保持原有大小
+            return 20;
+        }
     }
     
     calculateGridDimensions() {
@@ -77,20 +99,69 @@ class Pixel留言板 {
         cell.dataset.col = col;
         cell.dataset.id = `${row}-${col}`;
         
+        // 鼠标事件
         cell.addEventListener('mousedown', (e) => this.handleMouseDown(e, cell));
         cell.addEventListener('mouseenter', (e) => this.handleMouseEnter(e, cell));
         cell.addEventListener('mouseover', (e) => this.handleMouseOver(e, cell));
         cell.addEventListener('mouseout', () => this.hideTooltip());
         
+        // 触摸事件
+        cell.addEventListener('touchstart', (e) => this.handleTouchStart(e, cell));
+        cell.addEventListener('touchmove', (e) => this.handleTouchMove(e, cell));
+        
         return cell;
     }
     
     bindEvents() {
+        // 鼠标事件
         document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         document.addEventListener('mouseup', () => this.handleMouseUp());
         
+        // 触摸事件
+        document.addEventListener('touchmove', (e) => this.handleTouchMoveGlobal(e));
+        document.addEventListener('touchend', () => this.handleTouchEnd());
+        
         this.saveBtn.addEventListener('click', () => this.saveMessage());
         this.cancelBtn.addEventListener('click', () => this.closePopup());
+    }
+    
+    // 触摸事件处理
+    handleTouchStart(e, cell) {
+        e.preventDefault();
+        
+        this.isDragging = true;
+        this.startCell = cell;
+        this.selectedCells.clear();
+        this.clearSelection();
+        
+        this.selectCell(cell);
+    }
+    
+    handleTouchMove(e, cell) {
+        if (this.isDragging) {
+            e.preventDefault();
+            this.selectCellsBetween(this.startCell, cell);
+        }
+    }
+    
+    handleTouchMoveGlobal(e) {
+        if (!this.isDragging) return;
+        
+        e.preventDefault();
+        const touch = e.touches[0];
+        const cell = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (cell && cell.classList.contains('grid-cell')) {
+            this.selectCellsBetween(this.startCell, cell);
+        }
+    }
+    
+    handleTouchEnd() {
+        if (this.isDragging) {
+            this.isDragging = false;
+            if (this.selectedCells.size > 0) {
+                this.showPopup();
+            }
+        }
     }
     
     setupFormattingTools() {
@@ -371,6 +442,7 @@ class Pixel留言板 {
     
     handleResize() {
         this.gridContainer.innerHTML = '';
+        this.cellSize = this.calculateCellSize(); // 重新计算单元格大小
         this.calculateGridDimensions();
         this.generateGrid();
         this.messageData.forEach(message => {
