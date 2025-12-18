@@ -22,6 +22,24 @@ class Pixel留言板 {
             underline: false
         };
         
+        // Firebase配置
+        this.firebaseConfig = {
+            apiKey: "AIzaSyCsn_Q5l00__wIRNFPqe2UrAjTC6tKwOw0",
+            authDomain: "pixelboard-4edc0.firebaseapp.com",
+            databaseURL: "https://pixelboard-4edc0-default-rtdb.firebaseio.com",
+            projectId: "pixelboard-4edc0",
+            storageBucket: "pixelboard-4edc0.firebasestorage.app",
+            messagingSenderId: "310989164404",
+            appId: "1:310989164404:web:357adecfda5e48ad2ba621",
+            measurementId: "G-XQ7KQ368XM"
+        };
+        
+        // 初始化Firebase
+        this.firebaseApp = firebase.initializeApp(this.firebaseConfig);
+        this.database = this.firebaseApp.database();
+        this.analytics = firebase.analytics(this.firebaseApp);
+        this.messagesRef = this.database.ref('messages');
+        
         this.init();
     }
     
@@ -218,10 +236,47 @@ class Pixel留言板 {
             color: color
         };
         
+        // 添加新消息
         this.messageData.set(messageId, messageObj);
         this.applyMessageToCells(messageObj);
+        
+        // 检测并清理被完全覆盖的消息
+        this.detectAndCleanOverriddenMessages();
+        
         this.saveData();
         this.closePopup();
+    }
+    
+    detectAndCleanOverriddenMessages() {
+        // 创建一个单元格到消息ID的映射，记录每个单元格当前被哪个消息占用
+        const cellToMessageMap = new Map();
+        
+        // 遍历所有消息，更新单元格映射（新消息会覆盖旧消息）
+        this.messageData.forEach((message, id) => {
+            message.cells.forEach(cellId => {
+                cellToMessageMap.set(cellId, id);
+            });
+        });
+        
+        // 找出所有被完全覆盖的消息
+        const messagesToRemove = [];
+        
+        this.messageData.forEach((message, id) => {
+            // 检查消息的每个单元格是否都被其他消息占用
+            const isCompletelyOverridden = message.cells.every(cellId => {
+                const currentMessageId = cellToMessageMap.get(cellId);
+                return currentMessageId !== undefined && currentMessageId !== id;
+            });
+            
+            if (isCompletelyOverridden) {
+                messagesToRemove.push(id);
+            }
+        });
+        
+        // 移除被完全覆盖的消息
+        messagesToRemove.forEach(id => {
+            this.messageData.delete(id);
+        });
     }
     
     applyMessageToCells(messageObj) {
@@ -291,21 +346,35 @@ class Pixel留言板 {
     }
     
     saveData() {
-        const data = {
-            messages: Array.from(this.messageData.values())
-        };
-        localStorage.setItem('pixelMessageBoard', JSON.stringify(data));
+        // 将数据保存到Firebase
+        const messagesObj = {};
+        this.messageData.forEach((message, id) => {
+            messagesObj[id] = message;
+        });
+        this.messagesRef.set(messagesObj);
     }
     
     loadData() {
-        const data = localStorage.getItem('pixelMessageBoard');
-        if (data) {
-            const parsedData = JSON.parse(data);
-            parsedData.messages.forEach(message => {
-                this.messageData.set(message.id, message);
-                this.applyMessageToCells(message);
+        // 监听Firebase数据变化
+        this.messagesRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            this.messageData.clear();
+            
+            // 清除所有已有消息的样式
+            document.querySelectorAll('.grid-cell.has-message').forEach(cell => {
+                cell.classList.remove('has-message');
+                delete cell.dataset.messageId;
+                cell.style.removeProperty('--message-color');
+                cell.style.background = 'rgba(255, 255, 255, 0.05)';
             });
-        }
+            
+            if (data) {
+                Object.values(data).forEach(message => {
+                    this.messageData.set(message.id, message);
+                    this.applyMessageToCells(message);
+                });
+            }
+        });
     }
 }
 
