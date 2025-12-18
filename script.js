@@ -327,9 +327,42 @@ class Pixel留言板 {
         }
         
         tooltip.innerHTML = formattedContent;
+        
+        // 计算tooltip的最佳位置，避免超出页面边缘
         tooltip.style.left = `${e.clientX}px`;
         tooltip.style.top = `${e.clientY + 20}px`;
+        
+        // 强制计算tooltip的尺寸
         tooltip.classList.remove('hidden');
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        // 调整位置，确保tooltip完全显示在视口中
+        let left = e.clientX;
+        let top = e.clientY + 20;
+        
+        // 检查右侧边界
+        if (left + tooltipRect.width > window.innerWidth) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        
+        // 检查左侧边界
+        if (left < 0) {
+            left = 10;
+        }
+        
+        // 检查底部边界
+        if (top + tooltipRect.height > window.innerHeight) {
+            top = e.clientY - tooltipRect.height - 10;
+        }
+        
+        // 检查顶部边界
+        if (top < 0) {
+            top = 10;
+        }
+        
+        // 设置最终位置
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
     }
     
     hideTooltip() {
